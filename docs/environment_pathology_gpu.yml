@@ -1,0 +1,6 @@
+name: pathology_gpu
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10.14
+prefix: /home/kimlab/miniforge3/envs/pathology_gpu
