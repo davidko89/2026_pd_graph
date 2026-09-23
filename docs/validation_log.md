@@ -22,22 +22,39 @@
 
 ## 2026-09-23 — 01_build_preproc_song2020.py
 
-**Scope:** Extract page 0 (real image) from all 32 hNuc TIFFs for sample
-PD04 E25 / Post-TP-D028 (4wk); drop embedded 1/12-scale thumbnail page.
-No pixel values altered — pure extraction/repackaging.
+**Scope:** Build preprocessed hNuc data for sample PD04 E25 / Post-TP-D028
+(4wk), 32 fields, in two sub-steps: (1) extract page 0 from each raw TIFF,
+dropping the embedded 1/12-scale thumbnail page; (2) convert each page-0
+TIFF to pyramidal, tiled format via libvips, required because OpenSlide
+(used internally by cellvit-inference) cannot open plain non-pyramidal
+TIFFs.
 
 **Findings:**
-- 32/32 files processed, all passed exact-match verification
-  against source page 0 (byte-for-byte identical arrays).
-- Output written to `preproc_data/song2020/` as `<original_name>_page0.tif`.
-- No visualization performed at this step — justified by exact-match check
-  being strictly stronger evidence than visual inspection for a lossless
-  extraction (no pixel values were transformed).
+- Page 0 extraction: 32/32 files passed exact-match verification against
+  source page 0 (byte-for-byte identical arrays). No pixel values altered —
+  pure extraction/repackaging. No visualization performed here — exact-match
+  is strictly stronger evidence than a visual check for a lossless
+  extraction.
+- Pyramid conversion: 32/32 files converted successfully via
+  `vips tiffsave ... --tile --pyramid`. Verified with OpenSlide on one file:
+  dimensions (1920, 1440) match original exactly, 4 pyramid levels generated
+  correctly.
+- **Important — embedded MPP tag on pyramid files is fake, do not trust it,
+  ever:** OpenSlide reports `openslide.mpp-x/y = 1000.0` microns/pixel on
+  the converted files. This is vips' generic fallback (1 px/mm), not a real
+  measurement, and is unrelated to (and different from) the original file's
+  already-unreliable 96 DPI tag. This is NOT limited to cellvit-inference —
+  any tool that opens these pyramid TIFFs (QuPath, other OpenSlide-based
+  tools) will silently report wrong physical distances if it trusts this
+  tag. Always override explicitly; never assume the file's own metadata
+  is meaningful.
 
-**Open item carried forward to 02_:** MPP/pixel-size calibration remains
-unknown (see 00_ log). CellViT-Inference assumes 0.25 µm/pixel by default;
-we have no verified real-world calibration for these images. Proceeding
-in 02_ with this caveat explicitly noted, not silently assumed away.
+**Decision carried forward to 02_:** True pixel calibration (µm/pixel) is
+unknown and unrecoverable from file metadata. `--wsi_mpp 0.25` will be
+passed explicitly to cellvit-inference (matching the model's native
+training resolution) — never left to auto-detection. This is a deliberate,
+documented, uncalibrated sanity-check assumption for this practice round,
+not a real measurement.
 
-**Status:** Preprocessing complete for this sample (32/32 files). Ready
-for `02_segment_nuclei_song2020.py`.
+**Status:** Preprocessing complete for this sample (32/32 files, both
+sub-steps). Ready for `02_segment_nuclei_song2020.py`.
