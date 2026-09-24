@@ -7,7 +7,7 @@ import tifffile
 PROJECT_ROOT = Path.home() / "projects" / "2026_pd_graph"
 DATA_ROOT = Path.home() / "data" / "2026_pd_graph"
 RAW_DATA_ROOT = DATA_ROOT / "raw_data" / "song2020"
-PREPROC_DATA_DIR = DATA_ROOT / "preproc_data" / "song2020"
+PREPROC_DATA_DIR = DATA_ROOT / "preproc_data" / "song2020_d028"
 
 HNUC_DIR = RAW_DATA_ROOT / "Post-TP-D028" / "PD04 E25" / "Images (hNuc, PD04 E25, 4 weeks)"
 VALIDATION_LOG = PROJECT_ROOT / "docs" / "validation_log.md"
@@ -80,34 +80,70 @@ else:
     print("All files processed cleanly.")
 
 #%%
-from datetime import date
+import subprocess
 
-log_entry = f"""
-## {date.today().isoformat()} — 01_build_preproc_song2020.py
+# --- Convert one preprocessed file to pyramidal TIFF (required by OpenSlide/CellViT) ---
 
-**Scope:** Extract page 0 (real image) from all 32 hNuc TIFFs for sample
-PD04 E25 / Post-TP-D028 (4wk); drop embedded 1/12-scale thumbnail page.
-No pixel values altered — pure extraction/repackaging.
+def convert_to_pyramid(src_path: Path, dest_dir: Path) -> Path:
+    """Convert a plain TIFF to a pyramidal, tiled TIFF using libvips.
+    Required because OpenSlide (used internally by cellvit-inference)
+    cannot open plain, non-pyramidal TIFFs."""
+    dest_path = dest_dir / f"{src_path.stem}_pyramid.tif"
+    cmd = [
+        "vips", "tiffsave", str(src_path), str(dest_path),
+        "--tile", "--tile-width", "256", "--tile-height", "256",
+        "--pyramid", "--compression", "jpeg", "--Q", "90",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print("vips STDERR:", result.stderr)
+        raise RuntimeError(f"vips conversion failed for {src_path.name}")
+    return dest_path
 
-**Findings:**
-- {n_ok}/{len(results)} files processed, all passed exact-match verification
-  against source page 0 (byte-for-byte identical arrays).
-- Output written to `preproc_data/song2020/` as `<original_name>_page0.tif`.
-- No visualization performed at this step — justified by exact-match check
-  being strictly stronger evidence than visual inspection for a lossless
-  extraction (no pixel values were transformed).
+# Test on the single sample file we already extracted
+test_input = PREPROC_DATA_DIR / f"{sample_file.stem.replace(' ', '_')}_page0.tif"
+pyramid_out = convert_to_pyramid(test_input, PREPROC_DATA_DIR)
+print("Pyramid TIFF written to:", pyramid_out)
+print("File size:", pyramid_out.stat().st_size, "bytes")
 
-**Open item carried forward to 02_:** MPP/pixel-size calibration remains
-unknown (see 00_ log). CellViT-Inference assumes 0.25 µm/pixel by default;
-we have no verified real-world calibration for these images. Proceeding
-in 02_ with this caveat explicitly noted, not silently assumed away.
+#%%
+import openslide
 
-**Status:** Preprocessing complete for this sample (32/32 files). Ready
-for `02_segment_nuclei_song2020.py`.
-"""
+# --- Verify OpenSlide can open the pyramid TIFF -------------------------------
 
-with open(VALIDATION_LOG, "a") as f:
-    f.write(log_entry)
+slide = openslide.OpenSlide(str(pyramid_out))
 
-print("Logged to:", VALIDATION_LOG)
-# %%
+print("Dimensions (level 0):", slide.dimensions)
+print("Level count:", slide.level_count)
+print("Level dimensions:", slide.level_dimensions)
+print("Level downsamples:", slide.level_downsamples)
+
+# Check what metadata OpenSlide can find (this tells us whether it picked up
+# any pixel-size/mpp info — expect this to be empty/absent given our known
+# unreliable DPI tag, but worth confirming rather than assuming)
+print("\nAvailable properties:")
+for key in slide.properties.keys():
+    if "mpp" in key.lower() or "resolution" in key.lower():
+        print(f"  {key}: {slide.properties[key]}")
+
+mpp_x = slide.properties.get(openslide.PROPERTY_NAME_MPP_X, None)
+mpp_y = slide.properties.get(openslide.PROPERTY_NAME_MPP_Y, None)
+print(f"\nOpenSlide MPP-X: {mpp_x} | MPP-Y: {mpp_y}")
+
+slide.close()
+
+#%%
+# --- Convert all 32 preprocessed files to pyramidal TIFFs --------------------
+
+pyramid_results = []
+
+for f in tif_files:
+    page0_path = PREPROC_DATA_DIR / f"{f.stem.replace(' ', '_')}_page0.tif"
+    pyramid_path = convert_to_pyramid(page0_path, PREPROC_DATA_DIR)
+    pyramid_results.append({
+        "source": page0_path.name,
+        "pyramid_output": pyramid_path.name,
+        "size_bytes": pyramid_path.stat().st_size,
+    })
+
+print(f"Converted {len(pyramid_results)} files to pyramidal TIFF.")
