@@ -58,3 +58,43 @@ not a real measurement.
 
 **Status:** Preprocessing complete for this sample (32/32 files, both
 sub-steps). Ready for `02_segment_nuclei_song2020.py`.
+
+## 2026-10-06 — 02b_segment_nuclei_song2020.py (CellViT-Inference attempt — negative result; superseded by 02c_)
+
+**Scope:** D274 TH sample (`2-2_page0_pyramid.tif`), not song2020 hNuc. Cropped to
+largest connected component of a simple RGB stain mask, pyramid-converted, then ran
+`cellvit-inference` (HIPT model) on the crop.
+
+**What happened:** HIPT returned 35 detections (see `cell_detection.geojson`, overlay
+saved to `results/figures/song2020_d274/PD02_B25-1-TH-2-2_cropped_cellvit_overlay.png`).
+Visually, the detections landed on fiber crossings, not on the clearly visible TH+
+somata.
+
+**Likely cause (hypothesis, not tested):** HIPT is trained on PanNuke (H&E), and this
+is DAB IHC brightfield staining — out-of-distribution for the model.
+
+**Runtime fix (orthogonal, still useful):** the run initially OOM'd; setting
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` resolved it.
+
+**Decision:** CellViT-Inference is not currently a usable detector for this stain.
+`02b_segment_nuclei_song2020.py` is kept as-is (unchanged) for reference — it
+documents this negative result. Classical image processing (ring/interior masking +
+`blob_log`) was built out instead in a new script,
+`02c_segment_nuclei_song2020.py`. Detected coordinates from that approach are called
+"candidate blobs," not "TH+ cells" — some detections still land on dendrite segments
+/ background specks that haven't been tuned out yet.
+
+**Status:** CellViT-Inference path (02b) abandoned for this stain but preserved.
+`02c_` now carries `blob_log`-based candidate detection forward. Ready for
+threshold/parameter tuning and downstream graph construction once candidate quality
+is confirmed.
+
+**Addendum (same day):** the "v2" oval-cropping cell in `02b_` had a bug —
+`oval_mask` was taken as the largest component of the stain mask directly (the
+fiber ring itself), not the true hollow interior, so the crop bounding box spanned
+the ring's outer edge rather than the actual interior. This was caught while
+building `02c_` (which fills the ring then subtracts it to isolate the true
+interior). The fix (fill-holes + subtract-ring) was back-ported into `02b_`'s code
+for correctness, but `02b_` was **not re-run** — the existing
+`cell_detection.geojson` / overlay PNG / log file described above still reflect the
+original (buggy-crop) run and remain the documented negative result.

@@ -95,13 +95,21 @@ plt.savefig(RESULTS_FIG_DIR / "PD02_B25-1-TH-2-2_largest_component_check.png", d
 plt.show()
 
 #%%
-# --- Take the largest connected component OF the interior mask itself --------
+# --- Take the TRUE oval interior, not just the largest stained component -----
+# BUG (found while building 02c_): `largest_blob` above is the largest
+# connected component of the STAIN mask, i.e. the fiber ring itself, not the
+# oval interior. Its bounding box spans the ring's outer edge, so cropping to
+# it (even with a small pad) crops around the whole ring, not the actual
+# empty interior where cells sit. Fix: fill the ring to a solid disc, then
+# subtract the ring back out, leaving only the true hollow interior.
 
-interior_mask = cleaned_mask
-interior_labeled, n_interior = ndimage.label(interior_mask)
+filled_ring = ndimage.binary_fill_holes(largest_blob)
+interior_only = filled_ring & (~largest_blob)
+
+interior_labeled, n_interior = ndimage.label(interior_only)
 print(f"Interior mask has {n_interior} separate components (the oval + scattered tiny holes)")
 
-interior_sizes = ndimage.sum(interior_mask, interior_labeled, range(1, n_interior + 1))
+interior_sizes = ndimage.sum(interior_only, interior_labeled, range(1, n_interior + 1))
 largest_interior_label = np.argmax(interior_sizes) + 1
 oval_mask = (interior_labeled == largest_interior_label)
 
