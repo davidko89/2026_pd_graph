@@ -244,12 +244,17 @@ ys_det = [p[1] for p in all_points]
 # Read the crop image at full resolution (same pixel space as detections)
 crop_img = tifffile.imread(crop_pyramid, key=0)
 
-fig, ax = plt.subplots(figsize=(10, 12))
-ax.imshow(crop_img)
-ax.scatter(xs_det, ys_det, s=40, facecolors="none", edgecolors="lime", linewidths=1.5)
-ax.set_title(f"Detected cells (n={len(all_points)}) overlaid on D274 TH crop\n"
-             "(class labels ignored — PanNuke categories are not biologically meaningful here)")
-ax.axis("off")
+fig, axes = plt.subplots(1, 2, figsize=(18, 12))
+axes[0].imshow(crop_img)
+axes[0].set_title(f"Cropped to oval\nshape: {crop_img.shape}")
+axes[0].axis("off")
+
+axes[1].imshow(crop_img)
+axes[1].scatter(xs_det, ys_det, s=40, facecolors="none", edgecolors="lime", linewidths=1.5)
+axes[1].set_title(f"Detected cells (n={len(all_points)}) overlaid on D274 TH crop\n"
+                   "(class labels ignored — PanNuke categories are not biologically meaningful here)")
+axes[1].axis("off")
+
 fig.tight_layout()
 
 overlay_path = RESULTS_FIG_DIR / "PD02_B25-1-TH-2-2_cropped_cellvit_overlay.png"

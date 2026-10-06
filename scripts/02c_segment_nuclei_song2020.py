@@ -97,15 +97,20 @@ filtered_blobs = [
 ]
 print(f"Blobs after interior filtering: {len(filtered_blobs)}")
 
-fig, ax = plt.subplots(figsize=(10, 12))
-ax.imshow(crop_img)
+fig, axes = plt.subplots(1, 2, figsize=(18, 12))
+axes[0].imshow(crop_img)
+axes[0].set_title(f"Cropped to oval\nshape: {crop_img.shape}")
+axes[0].axis("off")
+
+axes[1].imshow(crop_img)
 for y, x, sigma in filtered_blobs:
     radius = sigma * np.sqrt(2)
     circle = plt.Circle((x, y), radius, color="lime", linewidth=1.5, fill=False)
-    ax.add_patch(circle)
-ax.set_title(f"Candidate blobs, dilated-interior filtered (n={len(filtered_blobs)})")
-ax.axis("off")
-plt.tight_layout()
+    axes[1].add_patch(circle)
+axes[1].set_title(f"Candidate blobs, dilated-interior filtered (n={len(filtered_blobs)})")
+axes[1].axis("off")
+
+fig.tight_layout()
 plt.savefig(RESULTS_FIG_DIR / "PD02_B25-1-TH-2-2_final_blob_detection.png", dpi=150, bbox_inches="tight")
 plt.show()
 
