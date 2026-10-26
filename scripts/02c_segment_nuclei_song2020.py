@@ -127,4 +127,15 @@ df["radius_px"] = df["sigma"] * np.sqrt(2)
 table_path = RESULTS_TABLE_DIR / "PD02_B25-1-TH-2-2_detected_cells.csv"
 df.to_csv(table_path, index=False)
 print(f"Saved {len(df)} candidate blob coordinates to: {table_path}")
+
+#%%
+# --- Save crop + mask so downstream scripts don't recompute them -------------
+import json
+sample_id = "PD02_B25-1-TH-2-2"
+tifffile.imwrite(PROC_DATA_DIR / f"{sample_id}_crop_img.tif", crop_img)
+np.save(PROC_DATA_DIR / f"{sample_id}_oval_mask.npy", interior_mask_cropped)
+with open(PROC_DATA_DIR / f"{sample_id}_crop_bbox.json", "w") as f:
+    json.dump({"x_min": int(x_min), "x_max": int(x_max),
+               "y_min": int(y_min), "y_max": int(y_max)}, f, indent=2)
+print("Saved crop, mask, bbox to:", PROC_DATA_DIR)
 # %%
